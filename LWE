@@ -1,0 +1,113 @@
+s = generateRandomV(100,10007);
+m = 140;
+n = 100;
+alpha = 1/(sqrt(n)*(log2(n))^2);
+p = 10007;
+key = generatePublicKey(m, p, n, s, alpha);
+%bit = 0
+%encrypted = encryptBit(bit, k, m, n, p);
+%b = decryptBit(encrypted, s, p, n)
+message = [1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1]
+encrypted = encryptMessage(message, key, m, n, p);
+message2 = decryptMessage(encrypted, s, p, n)
+
+
+
+function s = generateRandomV(n, p)
+    %returns randomized s in z_p^n, s a column vector
+    s = [];
+    for i = 1:n
+        %generates each component by scaling the unif(0,1) and rounding
+        r = floor(p.*rand(1)); 
+        s = [s,r];
+    end
+    s = s';
+end
+
+
+
+function n = psi(stdv)
+    %generates random integers from the distribution outlined in the paper,
+    %distribution on 0, 1
+    ei = normrnd(0,stdv);
+    n = ei - floor(ei);
+end
+
+
+
+function e = generateError(m, alpha)
+    %returns a 1 by m array of e. this time in 0, 1
+    e = zeros(1,m);
+    stdv = alpha / (2*pi)^.5;
+    for i = 1:m
+        e(1,i) = psi(stdv);
+    end
+end
+
+
+
+function k = generatePublicKey(m, p, n, s, alpha)
+    %returns an n+1 by m matrix. Each column corresponds to an (a_i, b_i)
+    %pair. The first n integers of each column are a_i in column vector 
+    %form, the n+1 integer is b_i
+    k = zeros(n+1,m);
+    errors = generateError(m, alpha);
+    for i = 1:m
+        ai = generateRandomV(n, p);
+        bi = mod(mod((ai' * s), p)/p + errors(1,i), 1);
+        k(1:n,i) = ai;
+        k(n+1,i) = bi;
+    end
+end
+
+
+
+function encrypted = encryptBit(bit, key, m, n, p)
+    %returns n+1 by 1 vector. The first n terms are the vector a, the n+1
+    %term is the b value
+    size = round(m/2);
+    %for simplicity, we fix the size of M
+    S = randsample(m, size)';
+    encryptedA = zeros(n,1);
+    encryptedB = 0;
+    for j = 1:size
+        mVal = S(1,j);
+        encryptedB = encryptedB + key(n+1,mVal);
+        encryptedA = encryptedA + key(1:n,mVal);
+    end
+    encryptedB = mod(encryptedB + bit/2, 1);
+    encryptedA = mod(encryptedA, p);
+    encrypted = [encryptedA; encryptedB];
+end
+
+
+function decrypted = decryptBit(encrypted, s, p, n)
+    %encrypted is an n+1 by 1 vector, n+1 term corresponds to b
+    A = encrypted(1:n,1);
+    b = encrypted(n+1,1);
+    c = abs(b - mod((A'*s),p)/p);
+    Val = mod(c,1);
+    
+    if Val < 1/4
+        decrypted = 0;
+    else
+        decrypted = 1;
+    end
+end
+
+function encrypted = encryptMessage(message, key, m, n, p)
+    l = length(message);
+    encrypted = zeros(n+1, l);
+    for i = 1:l
+        encrypted(:,i) = encryptBit(message(1,i), key, m, n, p);
+    end
+end
+
+function decrypted = decryptMessage(encrypted, s, p, n)
+    [a, l] = size(encrypted);
+    decrypted = zeros(1,l);
+    for i = 1:l
+        decrypted(1,i) = decryptBit(encrypted(:,i), s, p, n);
+    end
+
+end
